@@ -1,10 +1,11 @@
 #pragma once
-#pragma comment(lib, "ws2_32")
-#include <thread>
-#include <WS2tcpip.h>
 
 #include <thread>
+#include <WS2tcpip.h>
+#define WIN32_LEAN_AND_MEAN
+#include <thread>
 #include <vector>
+#pragma comment(lib, "ws2_32.lib")
 
 #define MAX_SOCKBUF 1024 //패킷크기
 #define MAX_WORKERTHREAD 4 //쓰레드 풀에 넣을 쓰레드 수
@@ -284,11 +285,108 @@ class IOCompletionPort{
 			    //그리고 PostQueuedCompletionStatus()함수에의해 사용자
 			    //메세지가 도착되면 쓰레드를 종료한다.
 			    //////////////////////////////////////////////////////
+                bSuccess = GetQueuedCompletionStatus(mIOCPHandle, &dwIoSize, (PULONG_PTR)&pClientInfo, &lpOverlapped, INFINITE);
+
+                if(bSuccess == TRUE && dwIoSize == 0 & lpOverlapped == NULL)
+                {
+                    mIsWorkerRun = false;
+                    continue;
+                }
+
+                if(lpOverlapped == NULL)
+                {
+                    continue;
+                }
+
+                if(bSuccess == FALSE || (dwIoSize == 0 && bSuccess == TRUE))
+                {
+                    printf("client disconnection");
+                    CloseSocket(pClientInfo);
+                    continue;
+                }
+
+                stOverlappedEx* pOverlappedEx = (stOverlappedEx*)lpOverlapped;
+
+                //Overlapped I/O Recv작업 결과 뒤 처리
+                if(IOOperation::RECV == pOverlappedEx->m_eOperation)
+                {
+                    pOverlappedEx->m_szBuf[dwIoSize];
+                    printf("[Recv] bytes: %d , msg : %s\n", dwIoSize, pOverlappedEx->m_szBuf);
+
+                    SendMsg(pClientInfo, pOverlappedEx->m_szBuf, dwIoSize);
+                    BindRecv(pClientInfo);
+                }
+                //Overlapped I/O Send 작업 결과 뒤 처리
+                else if(IOOperation::SEND == pOverlappedEx->m_eOperation)
+                {
+                    printf("[Send] bytes : %d, msg : %s\n", dwIoSize, pOverlappedEx->m_szBuf);
+                }
+                else{
+                    printf("socket(%d) Exception", (int)pClientInfo->m_socketClient);
+                }
             }
         }
 
         void AccepterThread()
         {
-            
+            SOCKADDR_IN stClientAddr;
+            int nAddrLen = sizeof(SOCKADDR_IN);
+
+            while(mIsAccepterRun)
+            {
+                //접속을 받을 구조체의 인덱스를 얻어온다.
+                stClientInfo* pClientInfo = GetEmptyClientInfo();
+                if(pClientInfo == NULL)
+                {
+                    printf("Client FUll Error");
+                    return;
+                }
+                //클라이언트 접속 요청이 들어올 때까지 기다린다.
+                pClientInfo->m_socketClient = accept(mListenSocket, (SOCKADDR*)&stClientAddr, &nAddrLen);
+                if(pClientInfo->m_socketClient == INVALID_SOCKET)
+                {
+                    continue;
+                }
+                //I/O Completion Port객체와 소켓을 연결시킨다.
+                bool bRet = BindIOCompletionPort(pClientInfo);
+                if(bRet == false)
+                {
+                    return;
+                }
+                //Recv Overlapped I/O작업을 요청해 놓는다
+                bRet = BindRecv(pClientInfo);
+                if(bRet == false)
+                {
+                    return;
+                }
+
+                char clientIP[32] = {0, };
+                inet_ntop(AF_INET, &(stClientAddr.sin_addr), clientIP, 32 - 1);
+                printf("connect : IP(%s) SOCKET(%d)\n", clientIP, (int)pClientInfo->m_socketClient);
+
+                ++mClientCnt;
+            }
+        }
+
+        void CloseSocket(stClientInfo* pClientInfo, bool bIsForce = false)
+        {
+            struct linger stLinger = {0, 0}; //SO_DONTLINGER로 설정
+            //bIsForce가 true이면 SO_LINGER, timeout = 0으로 설정하여 강제종료
+            //주의: 데이터 손실이 있을 수 있음
+            if(bIsForce == true)
+            {
+                stLinger.l_onoff = 1;
+            }
+
+            //socketClose소켓의 데이터 송수신을 모두 중단시킨다.
+            shutdown(pClientInfo->m_socketClient, SD_BOTH);
+
+            //소켓 옵션을 설정한다.
+            setsockopt(pClientInfo->m_socketClient, SOL_SOCKET, SO_LINGER, (char*)&stLinger, sizeof(stLinger));
+
+            //소켓 연결을 종료시킨다.
+            closesocket(pClientInfo->m_socketClient);
+
+            pClientInfo->m_socketClient = INVALID_SOCKET;
         }
 };
