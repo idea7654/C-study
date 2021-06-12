@@ -3,6 +3,7 @@
         "chrono": "cpp",
         "ostream": "cpp",
         "future": "cpp",
-        "thread": "cpp"
+        "thread": "cpp",
+        "vector": "cpp"
     }
 }
