@@ -4,6 +4,7 @@
         "ostream": "cpp",
         "future": "cpp",
         "thread": "cpp",
-        "vector": "cpp"
+        "vector": "cpp",
+        "iosfwd": "cpp"
     }
 }

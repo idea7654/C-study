@@ -49,7 +49,7 @@ void quick_sort(typename vector<T>::iterator begin, typename vector<T>::iterator
     {
         //분할 작업을 수행
         auto partition_iter = partition<T>(begin, last);
-
+        
         //분할 작업에 의해 생성된 벡터를 재귀적으로 정렬
         quick_sort<T>(begin, partition_iter - 1);
         quick_sort<T>(partition_iter, last);
@@ -99,7 +99,7 @@ int main()
     run_quick_sort_test();
     while(true)
     {
-        
+
     }
     return 0;
 }
