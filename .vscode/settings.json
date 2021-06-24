@@ -5,6 +5,7 @@
         "future": "cpp",
         "thread": "cpp",
         "vector": "cpp",
-        "iosfwd": "cpp"
+        "iosfwd": "cpp",
+        "iostream": "cpp"
     }
 }
